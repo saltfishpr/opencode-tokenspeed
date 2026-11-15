@@ -58,7 +58,8 @@ export default Plugin.define({
     ctx.add(Style, BUTTON_STYLE);
     ctx.add(Slot, {
       at: "session.header",
-      order: 0,
+      // Host built-ins use 10 for the session-context button and 20 for the details summary.
+      order: 11,
       render(input) {
         const snap = () => (input.active ? snapshots[input.session.id] : undefined);
         const speed = () => {
