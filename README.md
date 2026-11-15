@@ -7,7 +7,7 @@ Token Speed 是 OpenCode 插件，在会话进行时显示 LLM 输出的实时 t
 - **TUI**：prompt footer 状态区显示 `TTFT 1.2s ⚡ 42 tok/s`。
 - **Desktop**：会话标题栏最左侧的按钮显示同样内容，悬停查看说明。
 
-指标只在流式输出期间显示，停止输出约 1.5 秒后自动隐藏。
+指标在 agent 处理该会话期间显示，会话回到 idle 时隐藏。首 token 之前、工具执行和重试等待等没有流式输出的阶段保留占位：TUI 显示 `⚡ - tok/s`，Desktop 显示 `- tok/s`。
 
 ## 安装
 
@@ -26,14 +26,15 @@ Token Speed 是 OpenCode 插件，在会话进行时显示 LLM 输出的实时 t
 
 插件订阅 server 的公开事件流，客户端本地计算：
 
-- `session.text.delta`、`session.reasoning.delta`、`session.tool.input.delta`：流式期间累计字符，按约 4 字符 / token 在 2 秒滑动窗口上估算速度，EMA 平滑。
+- `session.execution.started` 与 `session.execution.succeeded` / `failed` / `interrupted`：一次 execution 对应 agent 的一轮处理。开始后在两种界面上显示指示器，结束（含用户中断）时隐藏并清空上一步的速度和 TTFT。
+- `session.text.delta`、`session.reasoning.delta`、`session.tool.input.delta`：流式期间累计字符，按约 4 字符 / token 在 2 秒滑动窗口上估算速度，EMA 平滑；超过 1.5 秒没有增量时速度归零，指示器只保留占位。
 - `session.step.started` 到首个增量的事件差为 TTFT；`session.step.ended` 结束当前步骤的显示。
 - 多会话并行时按 `sessionID` 分别计算，界面只显示当前会话。
 
 ## 限制
 
 - 流式期间 provider 不上报 token 数，实时速度为估算值（字符数 ÷ 4）；每步结束后不回填精确值。
-- 工具执行期间没有流式输出，指示器隐藏。
+- 工具执行、重试等待等阶段没有流式输出，速度显示为 `-`，指示器保留到会话 idle。
 - Desktop GUI API 为 experimental，随 OpenCode 版本可能变化。
 
 ## 验证

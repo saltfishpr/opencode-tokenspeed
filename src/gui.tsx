@@ -1,5 +1,5 @@
 import { createKeyed, Plugin, Slot, Style } from "@opencode/plugin/gui";
-import { onCleanup } from "solid-js";
+import { onCleanup, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import { SpeedTracker, type SpeedSnapshot } from "./speed";
 
@@ -7,6 +7,10 @@ import { SpeedTracker, type SpeedSnapshot } from "./speed";
 // and 2.3.0 (CLI); TTFT is derived from the step's first delta, so the
 // newer session.step.first-token event is not required.
 const WATCHED = [
+  "session.execution.started",
+  "session.execution.succeeded",
+  "session.execution.failed",
+  "session.execution.interrupted",
   "session.step.started",
   "session.step.ended",
   "session.step.failed",
@@ -61,61 +65,69 @@ export default Plugin.define({
       // Host built-ins use 10 for the session-context button and 20 for the details summary.
       order: 11,
       render(input) {
-        const snap = () => (input.active ? snapshots[input.session.id] : undefined);
-        const speed = () => {
-          const value = snap();
-          return value && value.speed > 0 ? Math.round(value.speed) : "-";
-        };
-        const ttft = () => {
-          const value = snap()?.ttft;
-          return value ? `${(value / 1000).toFixed(1)}s` : "-";
+        // Only the routed timeline shows the indicator, and only while the
+        // agent works on that session; the slot then renders no DOM at all.
+        const shown = () => {
+          const value = input.active ? snapshots[input.session.id] : undefined;
+          return value?.busy ? value : undefined;
         };
         return (
-          <ctx.ui.Tooltip
-            placement="bottom"
-            value={
-              <span style={{ display: "flex", "flex-direction": "column" }}>
-                <span>Token Speed</span>
-                <span>TTFT: {ttft()}</span>
-              </span>
-            }
-          >
-            <ctx.ui.Button variant="ghost-muted" class="tokenspeed-button" size="small">
-              <span
-                style={{
-                  display: "flex",
-                  "align-items": "center",
-                  gap: "8px",
-                  "white-space": "nowrap",
-                }}
-              >
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 16 16"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="1.5"
-                  aria-hidden="true"
+          <Show when={shown()}>
+            {(value) => {
+              const speed = () => (value().speed > 0 ? Math.round(value().speed) : "-");
+              const ttft = () => {
+                const ms = value().ttft;
+                return ms ? `${(ms / 1000).toFixed(1)}s` : "-";
+              };
+              return (
+                <ctx.ui.Tooltip
+                  placement="bottom"
+                  value={
+                    <span style={{ display: "flex", "flex-direction": "column" }}>
+                      <span>Token Speed</span>
+                      <span>TTFT: {ttft()}</span>
+                    </span>
+                  }
                 >
-                  <path d="M9 1.5 3.5 9h3.5l-1 5.5L11.5 7H8l1-5.5z" stroke-linejoin="round" />
-                </svg>
-                <span style={{ display: "flex", "align-items": "center", gap: "4px" }}>
-                  <span
-                    style={{
-                      display: "inline-block",
-                      "min-width": "3ch",
-                      "text-align": "right",
-                      "font-variant-numeric": "tabular-nums",
-                    }}
-                  >
-                    {speed()}
-                  </span>
-                  <span>tok/s</span>
-                </span>
-              </span>
-            </ctx.ui.Button>
-          </ctx.ui.Tooltip>
+                  <ctx.ui.Button variant="ghost-muted" class="tokenspeed-button" size="small">
+                    <span
+                      style={{
+                        display: "flex",
+                        "align-items": "center",
+                        gap: "8px",
+                        "white-space": "nowrap",
+                      }}
+                    >
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 16 16"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        aria-hidden="true"
+                      >
+                        <path d="M9 1.5 3.5 9h3.5l-1 5.5L11.5 7H8l1-5.5z" stroke-linejoin="round" />
+                      </svg>
+                      <span style={{ display: "flex", "align-items": "center", gap: "4px" }}>
+                        <span
+                          style={{
+                            display: "inline-block",
+                            "min-width": "3ch",
+                            "text-align": "right",
+                            "font-variant-numeric": "tabular-nums",
+                          }}
+                        >
+                          {speed()}
+                        </span>
+                        <span>tok/s</span>
+                      </span>
+                    </span>
+                  </ctx.ui.Button>
+                </ctx.ui.Tooltip>
+              );
+            }}
+          </Show>
         );
       },
     });

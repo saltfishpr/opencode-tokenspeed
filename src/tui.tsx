@@ -20,9 +20,11 @@ export default Plugin.define({
     const timer = setInterval(() => {
       for (const sessionID of tracker.tick(Date.now())) record(sessionID);
     }, 500);
+    // The footer shows the indicator for the whole turn, including steps that
+    // stream nothing yet, and hides it once the session goes idle.
     const visible = (sessionID: string | undefined): SpeedSnapshot | undefined => {
       const snap = sessionID ? snapshots[sessionID] : undefined;
-      return snap && snap.speed > 0 ? snap : undefined;
+      return snap?.busy ? snap : undefined;
     };
 
     const unregister = context.ui.slot({
@@ -41,6 +43,6 @@ export default Plugin.define({
 });
 
 function label(speed: number, ttft: number | null): string {
-  const rate = `⚡ ${Math.round(speed)} tok/s`;
+  const rate = `⚡ ${speed > 0 ? Math.round(speed) : "-"} tok/s`;
   return ttft ? `TTFT ${(ttft / 1000).toFixed(1)}s ${rate}` : rate;
 }

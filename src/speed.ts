@@ -20,6 +20,8 @@ export interface SpeedSnapshot {
   readonly speed: number;
   /** Time from step start to the first streamed token, in ms. */
   readonly ttft: number | null;
+  /** The agent is working on this session, including steps without output. */
+  readonly busy: boolean;
 }
 
 interface StepState {
@@ -51,6 +53,7 @@ function updateRate(step: StepState, now: number): void {
 
 export class SpeedTracker {
   private steps = new Map<string, StepState>();
+  private busy = new Set<string>();
 
   /**
    * Feeds one server event. Returns the session whose snapshot may have
@@ -63,7 +66,26 @@ export class SpeedTracker {
     const sessionID = data.sessionID;
 
     switch (event.type) {
+      // An execution is one turn of the agent loop, so these bracket exactly
+      // the span the indicator stays visible for. The host derives its own
+      // running state from the same events.
+      case "session.execution.started": {
+        this.busy.add(sessionID);
+        return sessionID;
+      }
+      case "session.execution.succeeded":
+      case "session.execution.failed":
+      case "session.execution.interrupted": {
+        this.busy.delete(sessionID);
+        // The turn is over: drop the last step so its rate or TTFT cannot
+        // reappear as stale data before the next turn's first delta.
+        this.steps.set(sessionID, freshStep());
+        return sessionID;
+      }
       case "session.step.started": {
+        // Step events also mark the session busy, so a turn already running
+        // when the plugin loads still shows.
+        this.busy.add(sessionID);
         const step = freshStep();
         step.startedAt = now;
         this.steps.set(sessionID, step);
@@ -87,6 +109,7 @@ export class SpeedTracker {
       case "session.tool.input.delta": {
         const delta = data.delta;
         if (!delta) return null;
+        this.busy.add(sessionID);
         const step = this.steps.get(sessionID) ?? freshStep();
         this.steps.set(sessionID, step);
         // First observed delta doubles as the first token when the
@@ -117,7 +140,8 @@ export class SpeedTracker {
 
   snapshot(sessionID: string): SpeedSnapshot {
     const step = this.steps.get(sessionID);
-    if (!step) return { speed: 0, ttft: null };
-    return { speed: step.speed, ttft: step.ttft };
+    const busy = this.busy.has(sessionID);
+    if (!step) return { speed: 0, ttft: null, busy };
+    return { speed: step.speed, ttft: step.ttft, busy };
   }
 }
