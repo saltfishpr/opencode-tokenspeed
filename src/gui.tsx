@@ -24,8 +24,8 @@ const WATCHED = [
 const BUTTON_STYLE = `
   [data-component="button-v2"].tokenspeed-button {
     flex-shrink: 0;
-    padding: 0 6px;
     color: var(--v2-text-text-faint);
+    white-space: nowrap;
   }
   .tokenspeed-button:active > span {
     color: var(--v2-text-text-muted);
@@ -89,40 +89,18 @@ export default Plugin.define({
                     </span>
                   }
                 >
-                  <ctx.ui.Button variant="ghost-muted" class="tokenspeed-button" size="small">
+                  <ctx.ui.Button icon="waveform" variant="ghost-muted" class="tokenspeed-button" size="small">
                     <span
                       style={{
-                        display: "flex",
-                        "align-items": "center",
-                        gap: "8px",
-                        "white-space": "nowrap",
+                        display: "inline-block",
+                        "min-width": "3ch",
+                        "text-align": "right",
+                        "font-variant-numeric": "tabular-nums",
                       }}
                     >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 16 16"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="1.5"
-                        aria-hidden="true"
-                      >
-                        <path d="M9 1.5 3.5 9h3.5l-1 5.5L11.5 7H8l1-5.5z" stroke-linejoin="round" />
-                      </svg>
-                      <span style={{ display: "flex", "align-items": "center", gap: "4px" }}>
-                        <span
-                          style={{
-                            display: "inline-block",
-                            "min-width": "3ch",
-                            "text-align": "right",
-                            "font-variant-numeric": "tabular-nums",
-                          }}
-                        >
-                          {speed()}
-                        </span>
-                        <span>tok/s</span>
-                      </span>
+                      {speed()}
                     </span>
+                    <span>tok/s</span>
                   </ctx.ui.Button>
                 </ctx.ui.Tooltip>
               );
