@@ -1,5 +1,5 @@
 import { createKeyed, Plugin, Slot, Style } from "@opencode/plugin/gui";
-import { onCleanup, Show } from "solid-js";
+import { onCleanup } from "solid-js";
 import { createStore } from "solid-js/store";
 import { SpeedTracker, type SpeedSnapshot } from "./speed";
 
@@ -61,46 +61,62 @@ export default Plugin.define({
       order: 0,
       render(input) {
         const snap = () => (input.active ? snapshots[input.session.id] : undefined);
+        const speed = () => {
+          const value = snap();
+          return value && value.speed > 0 ? Math.round(value.speed) : "-";
+        };
+        const ttft = () => {
+          const value = snap()?.ttft;
+          return value ? `${(value / 1000).toFixed(1)}s` : "-";
+        };
         return (
-          <Show when={snap() && snap()!.speed > 0 ? snap() : undefined}>
-            {(value) => (
-              <ctx.ui.Tooltip
-                placement="bottom"
-                value={<span>First token {((value().ttft ?? 0) / 1000).toFixed(1)}s · estimated output</span>}
+          <ctx.ui.Tooltip
+            placement="bottom"
+            value={
+              <span style={{ display: "flex", "flex-direction": "column" }}>
+                <span>Token Speed</span>
+                <span>TTFT: {ttft()}</span>
+              </span>
+            }
+          >
+            <ctx.ui.Button variant="ghost-muted" class="tokenspeed-button" size="small">
+              <span
+                style={{
+                  display: "flex",
+                  "align-items": "center",
+                  gap: "8px",
+                  "white-space": "nowrap",
+                }}
               >
-                <ctx.ui.Button variant="ghost-muted" class="tokenspeed-button" size="small">
+                <svg
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="1.5"
+                  aria-hidden="true"
+                >
+                  <path d="M9 1.5 3.5 9h3.5l-1 5.5L11.5 7H8l1-5.5z" stroke-linejoin="round" />
+                </svg>
+                <span style={{ display: "flex", "align-items": "center", gap: "4px" }}>
                   <span
                     style={{
-                      display: "flex",
-                      "align-items": "center",
-                      gap: "8px",
-                      "white-space": "nowrap",
+                      display: "inline-block",
+                      "min-width": "4ch",
+                      "text-align": "right",
+                      "font-variant-numeric": "tabular-nums",
                     }}
                   >
-                    <svg
-                      width="16"
-                      height="16"
-                      viewBox="0 0 16 16"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="1.5"
-                      aria-hidden="true"
-                    >
-                      <path d="M9 1.5 3.5 9h3.5l-1 5.5L11.5 7H8l1-5.5z" stroke-linejoin="round" />
-                    </svg>
-                    {label(value().speed, value().ttft)}
+                    {speed()}
                   </span>
-                </ctx.ui.Button>
-              </ctx.ui.Tooltip>
-            )}
-          </Show>
+                  <span>tok/s</span>
+                </span>
+              </span>
+            </ctx.ui.Button>
+          </ctx.ui.Tooltip>
         );
       },
     });
   },
 });
-
-function label(speed: number, ttft: number | null): string {
-  const rate = `⚡ ${Math.round(speed)} tok/s`;
-  return ttft ? `${(ttft / 1000).toFixed(1)}s ${rate}` : rate;
-}
