@@ -103,7 +103,7 @@ export default Plugin.define({
                   <span
                     style={{
                       display: "inline-block",
-                      "min-width": "4ch",
+                      "min-width": "3ch",
                       "text-align": "right",
                       "font-variant-numeric": "tabular-nums",
                     }}
