@@ -43,6 +43,6 @@ export default Plugin.define({
 });
 
 function label(speed: number, ttft: number | null): string {
-  const rate = `⚡ ${speed > 0 ? Math.round(speed) : "-"} tok/s`;
+  const rate = `↯ ${speed > 0 ? Math.round(speed) : "-"} tok/s`;
   return ttft ? `TTFT ${(ttft / 1000).toFixed(1)}s ${rate}` : rate;
 }

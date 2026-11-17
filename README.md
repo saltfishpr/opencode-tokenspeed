@@ -4,10 +4,10 @@ Token Speed 是 OpenCode 插件，在会话进行时显示 LLM 输出的实时 t
 
 ## 界面
 
-- **TUI**：prompt footer 状态区显示 `TTFT 1.2s ⚡ 42 tok/s`。
+- **TUI**：prompt footer 状态区显示 `TTFT 1.2s ↯ 42 tok/s`。
 - **Desktop**：会话标题栏最左侧的按钮显示同样内容，悬停查看说明。
 
-指标在 agent 处理该会话期间显示，会话回到 idle 时隐藏。首 token 之前、工具执行和重试等待等没有流式输出的阶段保留占位：TUI 显示 `⚡ - tok/s`，Desktop 显示 `- tok/s`。
+指标在 agent 处理该会话期间显示，会话回到 idle 时隐藏。首 token 之前、工具执行和重试等待等没有流式输出的阶段保留占位：TUI 显示 `↯ - tok/s`，Desktop 显示 `- tok/s`。
 
 ## 安装
 
