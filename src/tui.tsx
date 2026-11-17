@@ -30,7 +30,7 @@ export default Plugin.define({
     const unregister = context.ui.slot({
       append: "prompt.footer.status",
       render: (input) => (
-        <Show when={visible(input.sessionID)}>{(snap) => <text>{label(snap().speed, snap().ttft)}</text>}</Show>
+        <Show when={visible(input.sessionID)}>{(snap) => <text>{label(snap())}</text>}</Show>
       ),
     });
 
@@ -42,7 +42,10 @@ export default Plugin.define({
   },
 });
 
-function label(speed: number, ttft: number | null): string {
-  const rate = `↯ ${speed > 0 ? Math.round(speed) : "-"} tok/s`;
-  return ttft ? `TTFT ${(ttft / 1000).toFixed(1)}s ${rate}` : rate;
+function label(snap: SpeedSnapshot): string {
+  // A quiet stream keeps the last completed turn's average on screen until
+  // new deltas replace it with the live estimate.
+  const value = Math.round(snap.speed > 0 ? snap.speed : snap.average);
+  const rate = `↯ ${value > 0 ? value : "-"} tok/s`;
+  return snap.ttft ? `TTFT ${(snap.ttft / 1000).toFixed(1)}s ${rate}` : rate;
 }

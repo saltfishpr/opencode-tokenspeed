@@ -5,6 +5,10 @@
 // 4 characters per token. The estimate is smoothed with an EMA and expires to
 // 0 once the stream goes quiet.
 //
+// Each completed turn records its exact token count over the turn's wall time,
+// so the UI can keep showing that average while no characters stream instead
+// of falling back to an empty placeholder.
+//
 // Everything here is framework-free so both UI processes can use it unchanged.
 
 const CHARS_PER_TOKEN = 4;
@@ -18,10 +22,17 @@ const MIN_SPAN_MS = 300;
 export interface SpeedSnapshot {
   /** Estimated output tokens per second; 0 when not streaming. */
   readonly speed: number;
+  /** Exact tokens per second of the last completed turn; 0 before the first one. */
+  readonly average: number;
   /** Time from step start to the first streamed token, in ms. */
   readonly ttft: number | null;
   /** The agent is working on this session, including steps without output. */
   readonly busy: boolean;
+}
+
+interface TokenCounts {
+  readonly output: number;
+  readonly reasoning: number;
 }
 
 interface StepState {
@@ -31,6 +42,11 @@ interface StepState {
   samples: [number, number][];
   lastDeltaAt: number;
   speed: number;
+}
+
+interface TurnState {
+  startedAt: number;
+  tokens: number;
 }
 
 function freshStep(): StepState {
@@ -53,6 +69,8 @@ function updateRate(step: StepState, now: number): void {
 
 export class SpeedTracker {
   private steps = new Map<string, StepState>();
+  private turns = new Map<string, TurnState>();
+  private averages = new Map<string, number>();
   private busy = new Set<string>();
 
   /**
@@ -60,7 +78,9 @@ export class SpeedTracker {
    * changed, or null for events the tracker ignores.
    */
   onEvent(event: { type: string; created?: number; data?: unknown }): string | null {
-    const data = event.data as { sessionID?: string; delta?: string } | undefined;
+    const data = event.data as
+      | { sessionID?: string; delta?: string; started?: number; tokens?: TokenCounts }
+      | undefined;
     if (!data?.sessionID) return null;
     const now = event.created ?? Date.now();
     const sessionID = data.sessionID;
@@ -71,11 +91,20 @@ export class SpeedTracker {
       // running state from the same events.
       case "session.execution.started": {
         this.busy.add(sessionID);
+        this.turns.set(sessionID, { startedAt: now, tokens: 0 });
         return sessionID;
       }
       case "session.execution.succeeded":
       case "session.execution.failed":
       case "session.execution.interrupted": {
+        const turn = this.turns.get(sessionID);
+        if (turn) {
+          // Exact output for the whole turn, including tool-call steps and the
+          // time spent waiting on them.
+          const elapsed = now - turn.startedAt;
+          if (turn.tokens > 0 && elapsed > 0) this.averages.set(sessionID, (turn.tokens / elapsed) * 1000);
+          this.turns.delete(sessionID);
+        }
         this.busy.delete(sessionID);
         // The turn is over: drop the last step so its rate or TTFT cannot
         // reappear as stale data before the next turn's first delta.
@@ -87,20 +116,22 @@ export class SpeedTracker {
         // when the plugin loads still shows.
         this.busy.add(sessionID);
         const step = freshStep();
-        step.startedAt = now;
+        // `started` is the actual request start; `created` is the event's
+        // delivery time, which can trail the first token by seconds.
+        step.startedAt = data.started ?? now;
         this.steps.set(sessionID, step);
         return sessionID;
       }
       case "session.step.first-token": {
         const step = this.steps.get(sessionID);
-        if (!step) return null;
-        if (step.startedAt !== null) step.ttft = now - step.startedAt;
+        if (step?.startedAt != null) step.ttft ??= now - step.startedAt;
         return sessionID;
       }
       case "session.step.ended":
       case "session.step.failed": {
         // Keep the last step's ttft visible, but the stream is over.
         const step = this.steps.get(sessionID) ?? freshStep();
+        if (data.tokens) this.accrue(sessionID, data.tokens);
         this.steps.set(sessionID, { ...freshStep(), startedAt: null, ttft: step.ttft });
         return sessionID;
       }
@@ -138,10 +169,18 @@ export class SpeedTracker {
     return changed;
   }
 
+  private accrue(sessionID: string, tokens: TokenCounts): void {
+    const turn = this.turns.get(sessionID);
+    // Reasoning is output the user paid for and the live estimate counts its
+    // deltas, so the turn average includes it.
+    if (turn) turn.tokens += tokens.output + tokens.reasoning;
+  }
+
   snapshot(sessionID: string): SpeedSnapshot {
     const step = this.steps.get(sessionID);
     const busy = this.busy.has(sessionID);
-    if (!step) return { speed: 0, ttft: null, busy };
-    return { speed: step.speed, ttft: step.ttft, busy };
+    const average = this.averages.get(sessionID) ?? 0;
+    if (!step) return { speed: 0, average, ttft: null, busy };
+    return { speed: step.speed, average, ttft: step.ttft, busy };
   }
 }

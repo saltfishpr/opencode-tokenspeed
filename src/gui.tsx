@@ -74,7 +74,11 @@ export default Plugin.define({
         return (
           <Show when={shown()}>
             {(value) => {
-              const speed = () => (value().speed > 0 ? Math.round(value().speed) : "-");
+              const speed = () => {
+                const snap = value();
+                const rate = Math.round(snap.speed > 0 ? snap.speed : snap.average);
+                return rate > 0 ? rate : "-";
+              };
               const ttft = () => {
                 const ms = value().ttft;
                 return ms ? `${(ms / 1000).toFixed(1)}s` : "-";
