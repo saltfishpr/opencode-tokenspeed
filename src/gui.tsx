@@ -1,23 +1,7 @@
 import { createKeyed, Plugin, Slot, Style } from "@opencode/plugin/gui";
-import { onCleanup, Show } from "solid-js";
+import { createEffect, mapArray, onCleanup, Show } from "solid-js";
 import { createStore } from "solid-js/store";
 import { SpeedTracker, type SpeedSnapshot } from "./speed";
-
-// WATCHED uses only event types that exist on both OpenCode 2.2.5 (Desktop)
-// and 2.3.0 (CLI); TTFT is derived from the step's first delta, so the
-// newer session.step.first-token event is not required.
-const WATCHED = [
-  "session.execution.started",
-  "session.execution.succeeded",
-  "session.execution.failed",
-  "session.execution.interrupted",
-  "session.step.started",
-  "session.step.ended",
-  "session.step.failed",
-  "session.text.delta",
-  "session.reasoning.delta",
-  "session.tool.input.delta",
-] as const;
 
 // Match the host indicator button styles in OpenCode Desktop; the SDK Button
 // has no style prop.
@@ -34,30 +18,36 @@ const BUTTON_STYLE = `
 
 export default Plugin.define({
   setup(ctx) {
-    const tracker = new SpeedTracker();
-    const [snapshots, setSnapshots] = createStore<Record<string, SpeedSnapshot>>({});
-    const record = (sessionID: string) => setSnapshots(sessionID, tracker.snapshot(sessionID));
+    const [snapshots, setSnapshots] = createStore<Partial<Record<string, Record<string, SpeedSnapshot>>>>({});
 
-    // Subscribe on the current server's client and restart if the server
-    // restarts, since ctx.client changes identity then.
-    createKeyed(
-      () => ctx.client,
-      (client) => {
-        const controller = new AbortController();
-        void (async () => {
-          for await (const event of client.event.subscribe({ types: [...WATCHED], signal: controller.signal })) {
-            const sessionID = tracker.onEvent(event);
-            if (sessionID) record(sessionID);
-          }
-        })().catch(() => {});
-        onCleanup(() => controller.abort());
-      },
+    // Keep listening for background tabs without opening another event stream.
+    createEffect(
+      mapArray(
+        () => [...new Set(ctx.sessions.list().map((session) => session.server))],
+        (server) => {
+          createKeyed(
+            () => server.data,
+            (data) => {
+              const tracker = new SpeedTracker();
+              setSnapshots(server.id, {});
+              const record = (sessionID: string) => setSnapshots(server.id, sessionID, tracker.snapshot(sessionID));
+              const stop = data.listen(({ details }) => {
+                const sessionID = tracker.onEvent(details);
+                if (sessionID) record(sessionID);
+              });
+              const timer = setInterval(() => {
+                for (const sessionID of tracker.tick(Date.now())) record(sessionID);
+              }, 500);
+              onCleanup(() => {
+                stop();
+                clearInterval(timer);
+                setSnapshots(server.id, undefined);
+              });
+            },
+          );
+        },
+      ),
     );
-
-    const timer = setInterval(() => {
-      for (const sessionID of tracker.tick(Date.now())) record(sessionID);
-    }, 500);
-    onCleanup(() => clearInterval(timer));
 
     ctx.add(Style, BUTTON_STYLE);
     ctx.add(Slot, {
@@ -68,7 +58,7 @@ export default Plugin.define({
         // Only the routed timeline shows the indicator, and only while the
         // agent works on that session; the slot then renders no DOM at all.
         const shown = () => {
-          const value = input.active ? snapshots[input.session.id] : undefined;
+          const value = input.active ? snapshots[input.session.server.id]?.[input.session.id] : undefined;
           return value?.busy ? value : undefined;
         };
         return (
